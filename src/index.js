@@ -2,20 +2,8 @@ import rsvp from 'rsvp';
 
 module.exports = class GameStorage {
   constructor(name, firebase) {
-    this.name = config.name;
-    this._firebase = config.firebase;
-  }
-
-  waitForAuth() {
-    const auth = this.firebaseAuth();
-    const promise = new rsvp.Promise((resolve) => {
-      const callback = () => {
-        off();
-        resolve();
-      };
-      const off = auth.onAuthStateChanged(callback);
-    });
-    return promise;
+    this.name = name;
+    this._firebase = firebase;
   }
 
   gameDataRef(path) {
@@ -97,5 +85,17 @@ module.exports = class GameStorage {
 
   firebaseAuth() {
     return this._firebase.auth();
+  }
+
+  waitForAuth() {
+    const auth = this.firebaseAuth();
+    const promise = new rsvp.Promise((resolve) => {
+      const callback = () => {
+        off();
+        resolve();
+      };
+      const off = auth.onAuthStateChanged(callback);
+    });
+    return promise;
   }
 }
