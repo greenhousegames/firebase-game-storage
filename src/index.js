@@ -1,9 +1,15 @@
+import firebase from 'firebase';
 import rsvp from 'rsvp';
 
 module.exports = class GameStorage {
   constructor(name, firebase) {
     this.name = name;
+    this.mode = null;
     this._firebase = firebase;
+  }
+
+  setMode(mode) {
+    this.mode = mode;
   }
 
   gameDataRef(path) {
@@ -36,16 +42,68 @@ module.exports = class GameStorage {
     return promise;
   }
 
+  saveGamePlayed(data) {
+    const origKeys = Object.keys(data);
+    const gamedata = {
+      endedAt: firebase.database.ServerValue.TIMESTAMP,
+      uid: this.firebaseAuth().currentUser ? this.firebaseAuth().currentUser.uid : ''
+    };
+    origKeys.forEach((key) => {
+      gamedata[key] = data[key];
+    });
+
+    const promise = new rsvp.Promise((resolve, reject) => {
+      const promises = [];
+      promises.push(this.gameUserDataRef().push().set(gamedata));
+
+      // update stats for mode
+      promises.push(this.incrementGameStat(this.mode + '-played'));
+      origKeys.forEach((key) => {
+        promises.push(this.saveMaxGameStat(this.mode + '-' + key, gamedata[key]));
+      });
+
+      // update stats for totals
+      promises.push(this.incrementUserGameStat('total-played'));
+
+      rsvp.all(promises).then(resolve).catch(reject);
+    });
+    return promise;
+  }
+
   incrementUserGameStat(stat, inc) {
-    _saveGameStat(stat, 'inc', inc || 1);
+    return _saveGameStat(stat, 'inc', inc || 1);
   }
 
   saveMaxUserGameStat(stat, newValue) {
-    _saveGameStat(stat, 'max', newValue);
+    return _saveGameStat(stat, 'max', newValue);
   }
 
   saveMinUserGameStat(stat, newValue) {
-    _saveGameStat(stat, 'min', newValue);
+    return _saveGameStat(stat, 'min', newValue);
+  }
+
+  getTopUserGameStat(stat, n) {
+    n = n || 1;
+    const childProp = this.mode + '-' + stat;
+    const values = [];
+    const query = this.gamestatsRef.orderByChild(childProp).limitToLast(n);
+    const promise = new rsvp.Promise((resolve) => {
+      query.on('child_added', (snapshot) => {
+        values.push(snapshot.child(childProp).val());
+        if (values.length === n) {
+          done();
+        }
+      });
+
+      const done = () => {
+        clearTimeout(timeout);
+        query.off('child_added');
+        values.sort((a, b) => b - a);
+        resolve(values);
+      };
+      const timeout = setTimeout(done, 5000);
+    });
+    return promise;
   }
 
   _saveGameStat(stat, type, value) {
