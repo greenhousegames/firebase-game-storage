@@ -24,11 +24,6 @@ module.exports = function () {
   }
 
   _createClass(GameStorage, [{
-    key: 'setMode',
-    value: function setMode(mode) {
-      this.mode = mode;
-    }
-  }, {
     key: 'gameDataRef',
     value: function gameDataRef(path) {
       var ref = this._firebase.database().ref('games').child(this.name);
@@ -52,22 +47,72 @@ module.exports = function () {
       }
     }
   }, {
-    key: 'queryTotalGamesPlayed',
-    value: function queryTotalGamesPlayed() {
+    key: 'queryTotalUsersPlayed',
+    value: function queryTotalUsersPlayed(mode) {
       var _this = this;
 
+      mode = mode || this.mode;
+      var childProp = mode + '-played';
       var promise = new _rsvp2.default.Promise(function (resolve) {
-        _this.gameDataRef().once('value', function (snapshot) {
+        _this.gameUserDataRef().orderByChild(childProp).startAt(1).once('value', function (snapshot) {
           resolve(snapshot.numChildren());
         });
       });
       return promise;
     }
   }, {
-    key: 'saveGamePlayed',
-    value: function saveGamePlayed(data) {
+    key: 'queryTotalGamesPlayed',
+    value: function queryTotalGamesPlayed() {
       var _this2 = this;
 
+      var promise = new _rsvp2.default.Promise(function (resolve) {
+        _this2.gameDataRef().once('value', function (snapshot) {
+          resolve(snapshot.numChildren());
+        });
+      });
+      return promise;
+    }
+  }, {
+    key: 'queryUserStatValue',
+    value: function queryUserStatValue(prop, mode) {
+      mode = mode || this.mode;
+      var childProp = mode + '-' + prop;
+      var ref = this.gamestatsRef.child(this.game.greenhouse.storage.firebaseAuth().currentUser.uid).child(childProp);
+      var promise = new _rsvp2.default.Promise(function (resolve, reject) {
+        ref.once('value', function (snapshot) {
+          var val = snapshot.val();
+          if (val !== null) {
+            resolve(val);
+          } else {
+            reject();
+          }
+        });
+      });
+      return promise;
+    }
+  }, {
+    key: 'queryUserStatRanking',
+    value: function queryUserStatRanking(prop, mode) {
+      var _this3 = this;
+
+      mode = mode || this.mode;
+      var childProp = mode + '-' + prop;
+      var promise = new _rsvp2.default.Promise(function (resolve, reject) {
+        _this3.getGameStatValue(prop).then(function (value) {
+          var query = _this3.gamestatsRef.orderByChild(childProp).startAt(value);
+          query.once('value', function (snapshot) {
+            resolve(snapshot.numChildren());
+          });
+        }).catch(reject);
+      });
+      return promise;
+    }
+  }, {
+    key: 'saveGamePlayed',
+    value: function saveGamePlayed(data, mode) {
+      var _this4 = this;
+
+      mode = mode || this.mode;
       var origKeys = Object.keys(data);
       var gamedata = {
         endedAt: _firebase2.default.database.ServerValue.TIMESTAMP,
@@ -79,41 +124,27 @@ module.exports = function () {
 
       var promise = new _rsvp2.default.Promise(function (resolve, reject) {
         var promises = [];
-        promises.push(_this2.gameUserDataRef().push().set(gamedata));
+        promises.push(_this4.gameUserDataRef().push().set(gamedata));
 
         // update stats for mode
-        promises.push(_this2.incrementGameStat(_this2.mode + '-played'));
+        promises.push(_this4.incrementGameStat(mode + '-played'));
         origKeys.forEach(function (key) {
-          promises.push(_this2.saveMaxGameStat(_this2.mode + '-' + key, gamedata[key]));
+          promises.push(_this4.saveMaxGameStat(mode + '-' + key, gamedata[key]));
         });
 
         // update stats for totals
-        promises.push(_this2.incrementUserGameStat('total-played'));
+        promises.push(_this4.incrementUserGameStat('total-played'));
 
         _rsvp2.default.all(promises).then(resolve).catch(reject);
       });
       return promise;
     }
   }, {
-    key: 'incrementUserGameStat',
-    value: function incrementUserGameStat(stat, inc) {
-      return _saveGameStat(stat, 'inc', inc || 1);
-    }
-  }, {
-    key: 'saveMaxUserGameStat',
-    value: function saveMaxUserGameStat(stat, newValue) {
-      return _saveGameStat(stat, 'max', newValue);
-    }
-  }, {
-    key: 'saveMinUserGameStat',
-    value: function saveMinUserGameStat(stat, newValue) {
-      return _saveGameStat(stat, 'min', newValue);
-    }
-  }, {
-    key: 'getTopUserGameStat',
-    value: function getTopUserGameStat(stat, n) {
+    key: 'queryTopUserStatValues',
+    value: function queryTopUserStatValues(stat, n, mode) {
+      mode = mode || this.mode;
       n = n || 1;
-      var childProp = this.mode + '-' + stat;
+      var childProp = mode + '-' + stat;
       var values = [];
       var query = this.gamestatsRef.orderByChild(childProp).limitToLast(n);
       var promise = new _rsvp2.default.Promise(function (resolve) {
@@ -135,6 +166,21 @@ module.exports = function () {
         var timeout = setTimeout(done, 5000);
       });
       return promise;
+    }
+  }, {
+    key: 'incrementUserGameStat',
+    value: function incrementUserGameStat(stat, inc) {
+      return _saveGameStat(stat, 'inc', inc || 1);
+    }
+  }, {
+    key: 'saveMaxUserGameStat',
+    value: function saveMaxUserGameStat(stat, newValue) {
+      return _saveGameStat(stat, 'max', newValue);
+    }
+  }, {
+    key: 'saveMinUserGameStat',
+    value: function saveMinUserGameStat(stat, newValue) {
+      return _saveGameStat(stat, 'min', newValue);
     }
   }, {
     key: '_saveGameStat',
