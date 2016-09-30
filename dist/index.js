@@ -2,6 +2,10 @@
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
+var _firebase = require('firebase');
+
+var _firebase2 = _interopRequireDefault(_firebase);
+
 var _rsvp = require('rsvp');
 
 var _rsvp2 = _interopRequireDefault(_rsvp);
@@ -15,10 +19,16 @@ module.exports = function () {
     _classCallCheck(this, GameStorage);
 
     this.name = name;
+    this.mode = null;
     this._firebase = firebase;
   }
 
   _createClass(GameStorage, [{
+    key: 'setMode',
+    value: function setMode(mode) {
+      this.mode = mode;
+    }
+  }, {
     key: 'gameDataRef',
     value: function gameDataRef(path) {
       var ref = this._firebase.database().ref('games').child(this.name);
@@ -54,19 +64,77 @@ module.exports = function () {
       return promise;
     }
   }, {
+    key: 'saveGamePlayed',
+    value: function saveGamePlayed(data) {
+      var _this2 = this;
+
+      var origKeys = Object.keys(data);
+      var gamedata = {
+        endedAt: _firebase2.default.database.ServerValue.TIMESTAMP,
+        uid: this.firebaseAuth().currentUser ? this.firebaseAuth().currentUser.uid : ''
+      };
+      origKeys.forEach(function (key) {
+        gamedata[key] = data[key];
+      });
+
+      var promise = new _rsvp2.default.Promise(function (resolve, reject) {
+        var promises = [];
+        promises.push(_this2.gameUserDataRef().push().set(gamedata));
+
+        // update stats for mode
+        promises.push(_this2.incrementGameStat(_this2.mode + '-played'));
+        origKeys.forEach(function (key) {
+          promises.push(_this2.saveMaxGameStat(_this2.mode + '-' + key, gamedata[key]));
+        });
+
+        // update stats for totals
+        promises.push(_this2.incrementUserGameStat('total-played'));
+
+        _rsvp2.default.all(promises).then(resolve).catch(reject);
+      });
+      return promise;
+    }
+  }, {
     key: 'incrementUserGameStat',
     value: function incrementUserGameStat(stat, inc) {
-      _saveGameStat(stat, 'inc', inc || 1);
+      return _saveGameStat(stat, 'inc', inc || 1);
     }
   }, {
     key: 'saveMaxUserGameStat',
     value: function saveMaxUserGameStat(stat, newValue) {
-      _saveGameStat(stat, 'max', newValue);
+      return _saveGameStat(stat, 'max', newValue);
     }
   }, {
     key: 'saveMinUserGameStat',
     value: function saveMinUserGameStat(stat, newValue) {
-      _saveGameStat(stat, 'min', newValue);
+      return _saveGameStat(stat, 'min', newValue);
+    }
+  }, {
+    key: 'getTopUserGameStat',
+    value: function getTopUserGameStat(stat, n) {
+      n = n || 1;
+      var childProp = this.mode + '-' + stat;
+      var values = [];
+      var query = this.gamestatsRef.orderByChild(childProp).limitToLast(n);
+      var promise = new _rsvp2.default.Promise(function (resolve) {
+        query.on('child_added', function (snapshot) {
+          values.push(snapshot.child(childProp).val());
+          if (values.length === n) {
+            done();
+          }
+        });
+
+        var done = function done() {
+          clearTimeout(timeout);
+          query.off('child_added');
+          values.sort(function (a, b) {
+            return b - a;
+          });
+          resolve(values);
+        };
+        var timeout = setTimeout(done, 5000);
+      });
+      return promise;
     }
   }, {
     key: '_saveGameStat',
