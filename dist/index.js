@@ -14,7 +14,7 @@ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { de
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
-module.exports = function () {
+var GameStorage = function () {
   function GameStorage(name, firebase) {
     _classCallCheck(this, GameStorage);
 
@@ -24,6 +24,13 @@ module.exports = function () {
   }
 
   _createClass(GameStorage, [{
+    key: 'getMode',
+    value: function getMode(mode) {
+      var storage = new GameStorage(this.name, this._firebase);
+      storage.mode = mode;
+      return storage;
+    }
+  }, {
     key: 'gameDataRef',
     value: function gameDataRef(path) {
       var ref = this._firebase.database().ref('games').child(this.name);
@@ -48,11 +55,10 @@ module.exports = function () {
     }
   }, {
     key: 'queryTotalUsersPlayed',
-    value: function queryTotalUsersPlayed(mode) {
+    value: function queryTotalUsersPlayed() {
       var _this = this;
 
-      mode = mode || this.mode;
-      var childProp = mode + '-played';
+      var childProp = this.mode + '-played';
       var promise = new _rsvp2.default.Promise(function (resolve) {
         _this.gameUserDataRef().orderByChild(childProp).startAt(1).once('value', function (snapshot) {
           resolve(snapshot.numChildren());
@@ -74,9 +80,8 @@ module.exports = function () {
     }
   }, {
     key: 'queryUserStatValue',
-    value: function queryUserStatValue(prop, mode) {
-      mode = mode || this.mode;
-      var childProp = mode + '-' + prop;
+    value: function queryUserStatValue(prop) {
+      var childProp = this.mode + '-' + prop;
       var ref = this.gamestatsRef.child(this.game.greenhouse.storage.firebaseAuth().currentUser.uid).child(childProp);
       var promise = new _rsvp2.default.Promise(function (resolve, reject) {
         ref.once('value', function (snapshot) {
@@ -92,11 +97,10 @@ module.exports = function () {
     }
   }, {
     key: 'queryUserStatRanking',
-    value: function queryUserStatRanking(prop, mode) {
+    value: function queryUserStatRanking(prop) {
       var _this3 = this;
 
-      mode = mode || this.mode;
-      var childProp = mode + '-' + prop;
+      var childProp = this.mode + '-' + prop;
       var promise = new _rsvp2.default.Promise(function (resolve, reject) {
         _this3.getGameStatValue(prop).then(function (value) {
           var query = _this3.gamestatsRef.orderByChild(childProp).startAt(value);
@@ -109,15 +113,14 @@ module.exports = function () {
     }
   }, {
     key: 'saveGamePlayed',
-    value: function saveGamePlayed(data, mode) {
+    value: function saveGamePlayed(data) {
       var _this4 = this;
 
-      mode = mode || this.mode;
       var origKeys = Object.keys(data);
       var gamedata = {
         endedAt: _firebase2.default.database.ServerValue.TIMESTAMP,
         uid: this.firebaseAuth().currentUser ? this.firebaseAuth().currentUser.uid : '',
-        mode: mode
+        mode: this.mode
       };
       origKeys.forEach(function (key) {
         gamedata[key] = data[key];
@@ -128,9 +131,9 @@ module.exports = function () {
         promises.push(_this4.gameUserDataRef().push().set(gamedata));
 
         // update stats for mode
-        promises.push(_this4.incrementUserGameStat(mode + '-played'));
+        promises.push(_this4.incrementUserGameStat(_this4.mode + '-played'));
         origKeys.forEach(function (key) {
-          promises.push(_this4.saveMaxUserGameStat(mode + '-' + key, gamedata[key]));
+          promises.push(_this4.saveMaxUserGameStat(_this4.mode + '-' + key, gamedata[key]));
         });
 
         // update stats for totals
@@ -142,10 +145,9 @@ module.exports = function () {
     }
   }, {
     key: 'queryTopUserStatValues',
-    value: function queryTopUserStatValues(stat, n, mode) {
-      mode = mode || this.mode;
+    value: function queryTopUserStatValues(stat, n) {
       n = n || 1;
-      var childProp = mode + '-' + stat;
+      var childProp = this.mode + '-' + stat;
       var values = [];
       var query = this.gamestatsRef.orderByChild(childProp).limitToLast(n);
       var promise = new _rsvp2.default.Promise(function (resolve) {
@@ -242,3 +244,5 @@ module.exports = function () {
 
   return GameStorage;
 }();
+
+module.exports = GameStorage;
