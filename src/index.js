@@ -1,11 +1,17 @@
 import firebase from 'firebase';
 import rsvp from 'rsvp';
 
-module.exports = class GameStorage {
+class GameStorage {
   constructor(name, firebase) {
     this.name = name;
     this.mode = null;
     this._firebase = firebase;
+  }
+
+  getMode(mode) {
+    const storage = new GameStorage(this.name, this._firebase);
+    storage.mode = mode;
+    return storage;
   }
 
   gameDataRef(path) {
@@ -29,9 +35,8 @@ module.exports = class GameStorage {
     }
   }
 
-  queryTotalUsersPlayed(mode) {
-    mode = mode || this.mode;
-    const childProp = mode + '-played';
+  queryTotalUsersPlayed() {
+    const childProp = this.mode + '-played';
     const promise = new rsvp.Promise((resolve) => {
       this.gameUserDataRef().orderByChild(childProp).startAt(1).once('value', (snapshot) => {
         resolve(snapshot.numChildren());
@@ -49,9 +54,8 @@ module.exports = class GameStorage {
     return promise;
   }
 
-  queryUserStatValue(prop, mode) {
-    mode = mode || this.mode;
-    const childProp = mode + '-' + prop;
+  queryUserStatValue(prop) {
+    const childProp = this.mode + '-' + prop;
     const ref = this.gamestatsRef.child(this.game.greenhouse.storage.firebaseAuth().currentUser.uid).child(childProp);
     const promise = new rsvp.Promise((resolve, reject) => {
       ref.once('value', (snapshot) => {
@@ -66,9 +70,8 @@ module.exports = class GameStorage {
     return promise;
   }
 
-  queryUserStatRanking(prop, mode) {
-    mode = mode || this.mode;
-    const childProp = mode + '-' + prop;
+  queryUserStatRanking(prop) {
+    const childProp = this.mode + '-' + prop;
     const promise = new rsvp.Promise((resolve, reject) => {
       this.getGameStatValue(prop).then((value) => {
         const query = this.gamestatsRef.orderByChild(childProp).startAt(value);
@@ -80,13 +83,12 @@ module.exports = class GameStorage {
     return promise;
   }
 
-  saveGamePlayed(data, mode) {
-    mode = mode || this.mode;
+  saveGamePlayed(data) {
     const origKeys = Object.keys(data);
     const gamedata = {
       endedAt: firebase.database.ServerValue.TIMESTAMP,
       uid: this.firebaseAuth().currentUser ? this.firebaseAuth().currentUser.uid : '',
-      mode: mode
+      mode: this.mode
     };
     origKeys.forEach((key) => {
       gamedata[key] = data[key];
@@ -97,9 +99,9 @@ module.exports = class GameStorage {
       promises.push(this.gameUserDataRef().push().set(gamedata));
 
       // update stats for mode
-      promises.push(this.incrementUserGameStat(mode + '-played'));
+      promises.push(this.incrementUserGameStat(this.mode + '-played'));
       origKeys.forEach((key) => {
-        promises.push(this.saveMaxUserGameStat(mode + '-' + key, gamedata[key]));
+        promises.push(this.saveMaxUserGameStat(this.mode + '-' + key, gamedata[key]));
       });
 
       // update stats for totals
@@ -110,10 +112,9 @@ module.exports = class GameStorage {
     return promise;
   }
 
-  queryTopUserStatValues(stat, n, mode) {
-    mode = mode || this.mode;
+  queryTopUserStatValues(stat, n) {
     n = n || 1;
-    const childProp = mode + '-' + stat;
+    const childProp = this.mode + '-' + stat;
     const values = [];
     const query = this.gamestatsRef.orderByChild(childProp).limitToLast(n);
     const promise = new rsvp.Promise((resolve) => {
@@ -197,4 +198,6 @@ module.exports = class GameStorage {
     });
     return promise;
   }
-};
+}
+
+module.exports = GameStorage;
