@@ -31,8 +31,8 @@ var GameStorage = function () {
       return storage;
     }
   }, {
-    key: 'gameDataRef',
-    value: function gameDataRef(path) {
+    key: 'refGameData',
+    value: function refGameData(path) {
       var ref = this._firebase.database().ref('games').child(this.name);
       if (path) {
         ref = ref.child(path);
@@ -40,13 +40,22 @@ var GameStorage = function () {
       return ref;
     }
   }, {
-    key: 'gameUserDataRef',
-    value: function gameUserDataRef(path) {
+    key: 'refUserData',
+    value: function refUserData(path) {
+      var ref = this._firebase.database().ref('users');
+      if (path) {
+        ref = ref.child(path);
+      }
+      return ref;
+    }
+  }, {
+    key: 'refLoggedInUserData',
+    value: function refLoggedInUserData(path) {
       var uid = this.firebaseAuth().currentUser.uid;
       if (!uid) {
         return null;
       } else {
-        var ref = this._firebase.database().ref('users').child(this.firebaseAuth().currentUser.uid).child(this.name);
+        var ref = this.refUserData().child(uid);
         if (path) {
           ref = ref.child(path);
         }
@@ -58,9 +67,9 @@ var GameStorage = function () {
     value: function queryTotalUsersPlayed() {
       var _this = this;
 
-      var childProp = this.mode + '-played';
+      var childProp = this._getStatKey('played');
       var promise = new _rsvp2.default.Promise(function (resolve) {
-        _this.gameUserDataRef().orderByChild(childProp).startAt(1).once('value', function (snapshot) {
+        _this.refUserData().orderByChild(childProp).startAt(1).once('value', function (snapshot) {
           resolve(snapshot.numChildren());
         });
       });
@@ -72,7 +81,7 @@ var GameStorage = function () {
       var _this2 = this;
 
       var promise = new _rsvp2.default.Promise(function (resolve) {
-        _this2.gameDataRef().once('value', function (snapshot) {
+        _this2.refGameData().once('value', function (snapshot) {
           resolve(snapshot.numChildren());
         });
       });
@@ -81,10 +90,11 @@ var GameStorage = function () {
   }, {
     key: 'queryUserStatValue',
     value: function queryUserStatValue(prop) {
-      var childProp = this.mode + '-' + prop;
-      var ref = this.gamestatsRef.child(this.game.greenhouse.storage.firebaseAuth().currentUser.uid).child(childProp);
+      var _this3 = this;
+
+      var childProp = this._getStatKey(prop);
       var promise = new _rsvp2.default.Promise(function (resolve, reject) {
-        ref.once('value', function (snapshot) {
+        _this3.refLoggedInUserData(childProp).once('value', function (snapshot) {
           var val = snapshot.val();
           if (val !== null) {
             resolve(val);
@@ -98,12 +108,12 @@ var GameStorage = function () {
   }, {
     key: 'queryUserStatRanking',
     value: function queryUserStatRanking(prop) {
-      var _this3 = this;
+      var _this4 = this;
 
-      var childProp = this.mode + '-' + prop;
+      var childProp = this._getStatKey(prop);
       var promise = new _rsvp2.default.Promise(function (resolve, reject) {
-        _this3.getGameStatValue(prop).then(function (value) {
-          var query = _this3.gamestatsRef.orderByChild(childProp).startAt(value);
+        _this4.queryUserStatValue(prop).then(function (value) {
+          var query = _this4.refUserData().orderByChild(childProp).startAt(value);
           query.once('value', function (snapshot) {
             resolve(snapshot.numChildren());
           });
@@ -114,7 +124,7 @@ var GameStorage = function () {
   }, {
     key: 'saveGamePlayed',
     value: function saveGamePlayed(data) {
-      var _this4 = this;
+      var _this5 = this;
 
       var origKeys = Object.keys(data);
       var gamedata = {
@@ -128,16 +138,16 @@ var GameStorage = function () {
 
       var promise = new _rsvp2.default.Promise(function (resolve, reject) {
         var promises = [];
-        promises.push(_this4.gameUserDataRef().push().set(gamedata));
+        promises.push(_this5.refGameData().push().set(gamedata));
 
         // update stats for mode
-        promises.push(_this4.incrementUserGameStat(_this4.mode + '-played'));
+        promises.push(_this5.incrementUserGameStat(_this5._getStatKey('played')));
         origKeys.forEach(function (key) {
-          promises.push(_this4.saveMaxUserGameStat(_this4.mode + '-' + key, gamedata[key]));
+          promises.push(_this5.saveMaxUserGameStat(_this5._getStatKey(key), gamedata[key]));
         });
 
         // update stats for totals
-        promises.push(_this4.incrementUserGameStat('total-played'));
+        promises.push(_this5.incrementUserGameStat(_this5._getTotalKey('played')));
 
         _rsvp2.default.all(promises).then(resolve).catch(reject);
       });
@@ -147,9 +157,9 @@ var GameStorage = function () {
     key: 'queryTopUserStatValues',
     value: function queryTopUserStatValues(stat, n) {
       n = n || 1;
-      var childProp = this.mode + '-' + stat;
+      var childProp = this._getStatKey(stat);
       var values = [];
-      var query = this.gamestatsRef.orderByChild(childProp).limitToLast(n);
+      var query = this.refUserData().orderByChild(childProp).limitToLast(n);
       var promise = new _rsvp2.default.Promise(function (resolve) {
         query.on('child_added', function (snapshot) {
           values.push(snapshot.child(childProp).val());
@@ -173,22 +183,22 @@ var GameStorage = function () {
   }, {
     key: 'incrementUserGameStat',
     value: function incrementUserGameStat(stat, inc) {
-      return _saveGameStat(stat, 'inc', inc || 1);
+      return this._saveUserGameStat(stat, 'inc', inc || 1);
     }
   }, {
     key: 'saveMaxUserGameStat',
     value: function saveMaxUserGameStat(stat, newValue) {
-      return _saveGameStat(stat, 'max', newValue);
+      return this._saveUserGameStat(stat, 'max', newValue);
     }
   }, {
     key: 'saveMinUserGameStat',
     value: function saveMinUserGameStat(stat, newValue) {
-      return _saveGameStat(stat, 'min', newValue);
+      return this._saveUserGameStat(stat, 'min', newValue);
     }
   }, {
-    key: '_saveGameStat',
-    value: function _saveGameStat(stat, type, value) {
-      var ref = this.gameUserDataRef(stat);
+    key: '_saveUserGameStat',
+    value: function _saveUserGameStat(stat, type, value) {
+      var ref = this.refLoggedInUserData(stat);
       var promise = new _rsvp2.default.Promise(function (resolve, reject) {
         ref.once('value', function (snapshot) {
           var oldValue = snapshot.val() || 0;
@@ -221,6 +231,16 @@ var GameStorage = function () {
         });
       });
       return promise;
+    }
+  }, {
+    key: '_getTotalKey',
+    value: function _getTotalKey(stat) {
+      return this.name + '-total-' + stat;
+    }
+  }, {
+    key: '_getStatKey',
+    value: function _getStatKey(stat) {
+      return this.name + '-' + this.mode + '-' + stat;
     }
   }, {
     key: 'firebaseAuth',
