@@ -85,7 +85,8 @@ module.exports = class GameStorage {
     const origKeys = Object.keys(data);
     const gamedata = {
       endedAt: firebase.database.ServerValue.TIMESTAMP,
-      uid: this.firebaseAuth().currentUser ? this.firebaseAuth().currentUser.uid : ''
+      uid: this.firebaseAuth().currentUser ? this.firebaseAuth().currentUser.uid : '',
+      mode: mode
     };
     origKeys.forEach((key) => {
       gamedata[key] = data[key];
@@ -96,9 +97,9 @@ module.exports = class GameStorage {
       promises.push(this.gameUserDataRef().push().set(gamedata));
 
       // update stats for mode
-      promises.push(this.incrementGameStat(mode + '-played'));
+      promises.push(this.incrementUserGameStat(mode + '-played'));
       origKeys.forEach((key) => {
-        promises.push(this.saveMaxGameStat(mode + '-' + key, gamedata[key]));
+        promises.push(this.saveMaxUserGameStat(mode + '-' + key, gamedata[key]));
       });
 
       // update stats for totals
