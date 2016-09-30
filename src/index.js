@@ -98,4 +98,4 @@ module.exports = class GameStorage {
     });
     return promise;
   }
-}
+};
