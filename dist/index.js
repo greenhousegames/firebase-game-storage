@@ -14,24 +14,11 @@ module.exports = function () {
   function GameStorage(name, firebase) {
     _classCallCheck(this, GameStorage);
 
-    this.name = config.name;
-    this._firebase = config.firebase;
+    this.name = name;
+    this._firebase = firebase;
   }
 
   _createClass(GameStorage, [{
-    key: 'waitForAuth',
-    value: function waitForAuth() {
-      var auth = this.firebaseAuth();
-      var promise = new _rsvp2.default.Promise(function (resolve) {
-        var callback = function callback() {
-          off();
-          resolve();
-        };
-        var off = auth.onAuthStateChanged(callback);
-      });
-      return promise;
-    }
-  }, {
     key: 'gameDataRef',
     value: function gameDataRef(path) {
       var ref = this._firebase.database().ref('games').child(this.name);
@@ -122,6 +109,19 @@ module.exports = function () {
     key: 'firebaseAuth',
     value: function firebaseAuth() {
       return this._firebase.auth();
+    }
+  }, {
+    key: 'waitForAuth',
+    value: function waitForAuth() {
+      var auth = this.firebaseAuth();
+      var promise = new _rsvp2.default.Promise(function (resolve) {
+        var callback = function callback() {
+          off();
+          resolve();
+        };
+        var off = auth.onAuthStateChanged(callback);
+      });
+      return promise;
     }
   }]);
 
