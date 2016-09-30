@@ -116,7 +116,8 @@ module.exports = function () {
       var origKeys = Object.keys(data);
       var gamedata = {
         endedAt: _firebase2.default.database.ServerValue.TIMESTAMP,
-        uid: this.firebaseAuth().currentUser ? this.firebaseAuth().currentUser.uid : ''
+        uid: this.firebaseAuth().currentUser ? this.firebaseAuth().currentUser.uid : '',
+        mode: mode
       };
       origKeys.forEach(function (key) {
         gamedata[key] = data[key];
@@ -127,9 +128,9 @@ module.exports = function () {
         promises.push(_this4.gameUserDataRef().push().set(gamedata));
 
         // update stats for mode
-        promises.push(_this4.incrementGameStat(mode + '-played'));
+        promises.push(_this4.incrementUserGameStat(mode + '-played'));
         origKeys.forEach(function (key) {
-          promises.push(_this4.saveMaxGameStat(mode + '-' + key, gamedata[key]));
+          promises.push(_this4.saveMaxUserGameStat(mode + '-' + key, gamedata[key]));
         });
 
         // update stats for totals
