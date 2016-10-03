@@ -21,6 +21,7 @@ var GameStorage = function () {
     this.name = name;
     this.mode = 'standard';
     this._firebase = firebase;
+    this._listeners = [];
   }
 
   _createClass(GameStorage, [{
@@ -65,17 +66,17 @@ var GameStorage = function () {
   }, {
     key: 'off',
     value: function off() {
-      this.offGamePlayed();
+      this._listeners.forEach(function (listener) {
+        return listener.off();
+      });
     }
   }, {
     key: 'onGamePlayed',
     value: function onGamePlayed(cb) {
-      return this.refGameData().on('child_added', cb);
-    }
-  }, {
-    key: 'offGamePlayed',
-    value: function offGamePlayed(cb) {
-      return this.refGameData().off('child_added', cb);
+      var query = this.refGameData().orderByChild('endedAt').startAt(_firebase2.default.database.ServerValue.TIMESTAMP);
+      query.on('child_added', cb);
+      _listeners.push(query);
+      return query;
     }
   }, {
     key: 'queryTotalUsersPlayed',
@@ -182,12 +183,14 @@ var GameStorage = function () {
 
         // update stats for mode
         promises.push(_this7.incrementUserGameStat(_this7._getStatKey('played')));
+        promises.push(_this7.saveUserGameStat(_this7._getStatKey('lastplayed'), _firebase2.default.database.ServerValue.TIMESTAMP));
         origKeys.forEach(function (key) {
           promises.push(_this7.saveMaxUserGameStat(_this7._getStatKey(key), gamedata[key]));
         });
 
         // update stats for totals
         promises.push(_this7.incrementUserGameStat(_this7._getTotalKey('played')));
+        promises.push(_this7.saveUserGameStat(_this7._getTotalKey('lastplayed'), _firebase2.default.database.ServerValue.TIMESTAMP));
 
         _rsvp2.default.all(promises).then(resolve).catch(reject);
       });
@@ -226,6 +229,11 @@ var GameStorage = function () {
       return this._saveUserGameStat(stat, 'inc', inc || 1);
     }
   }, {
+    key: 'saveUserGameStat',
+    value: function saveUserGameStat(stat, newValue) {
+      return this._saveUserGameStat(stat, 'last', newValue);
+    }
+  }, {
     key: 'saveMaxUserGameStat',
     value: function saveMaxUserGameStat(stat, newValue) {
       return this._saveUserGameStat(stat, 'max', newValue);
@@ -260,6 +268,10 @@ var GameStorage = function () {
                 newValue = value;
                 save = true;
               }
+              break;
+            case 'last':
+              newValue = value;
+              save = true;
               break;
           }
 
