@@ -260,6 +260,22 @@ var GameStorage = function () {
       });
       return promise;
     }
+  }, {
+    key: 'requireAuth',
+    value: function requireAuth() {
+      var _this6 = this;
+
+      var promise = new _rsvp2.default.Promise(function (resolve, reject) {
+        _this6.waitForAuth().then(function () {
+          if (!_this6.firebaseAuth().currentUser) {
+            _this6.firebaseAuth().signInAnonymously().then(resolve).catch(reject);
+          } else {
+            resolve();
+          }
+        }).catch(reject);
+      });
+      return promise;
+    }
   }]);
 
   return GameStorage;
