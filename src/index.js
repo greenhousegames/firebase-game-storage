@@ -213,6 +213,19 @@ class GameStorage {
     });
     return promise;
   }
+
+  requireAuth() {
+    const promise = new rsvp.Promise((resolve, reject) => {
+      this.waitForAuth().then(() => {
+        if (!this.firebaseAuth().currentUser) {
+          this.firebaseAuth().signInAnonymously().then(resolve).catch(reject);
+        } else {
+          resolve();
+        }
+      }).catch(reject);
+    });
+    return promise;
+  }
 }
 
 module.exports = GameStorage;
