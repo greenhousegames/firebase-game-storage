@@ -4,7 +4,7 @@ import rsvp from 'rsvp';
 class GameStorage {
   constructor(name, firebase) {
     this.name = name;
-    this.mode = null;
+    this.mode = 'standard';
     this._firebase = firebase;
   }
 
@@ -78,14 +78,33 @@ class GameStorage {
   }
 
   queryUserStatRanking(prop) {
-    const childProp = this._getStatKey(prop);
     const promise = new rsvp.Promise((resolve, reject) => {
       this.queryUserStatValue(prop).then((value) => {
-        const query = this.refUserData().orderByChild(childProp).startAt(value);
-        query.once('value', (snapshot) => {
-          resolve(snapshot.numChildren());
-        });
+        this.queryTotalUsersWithStat(prop, value).then((total) => {
+          resolve(total);
+        }).catch(reject);
       }).catch(reject);
+    });
+    return promise;
+  }
+
+  queryTotalUsersWithStat(prop, value) {
+    value = value || 0;
+    const childProp = this._getStatKey(prop);
+    const promise = new rsvp.Promise((resolve) => {
+      this.refUserData().orderByChild(childProp).startAt(value).once('value', (snapshot) => {
+        resolve(snapshot.numChildren());
+      });
+    });
+    return promise;
+  }
+
+  queryTotalGamesWithStat(prop, value) {
+    value = value || 0;
+    const promise = new rsvp.Promise((resolve) => {
+      this.refGameData().orderByChild(prop).startAt(value).once('value', (snapshot) => {
+        resolve(snapshot.numChildren());
+      });
     });
     return promise;
   }
