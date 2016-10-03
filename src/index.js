@@ -43,6 +43,18 @@ class GameStorage {
     }
   }
 
+  off() {
+    this.offGamePlayed();
+  }
+
+  onGamePlayed(cb) {
+    return this.refGameData().on('child_added', cb);
+  }
+
+  offGamePlayed(cb) {
+    return this.refGameData().off('child_added', cb);
+  }
+
   queryTotalUsersPlayed() {
     const childProp = this._getStatKey('played');
     const promise = new rsvp.Promise((resolve) => {
