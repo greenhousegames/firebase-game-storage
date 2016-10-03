@@ -6,6 +6,7 @@ class GameStorage {
     this.name = name;
     this.mode = 'standard';
     this._firebase = firebase;
+    this._listeners = [];
   }
 
   getMode(mode) {
@@ -44,15 +45,16 @@ class GameStorage {
   }
 
   off() {
-    this.offGamePlayed();
+    this._listeners.forEach((listener) => listener.off());
   }
 
   onGamePlayed(cb) {
-    return this.refGameData().on('child_added', cb);
-  }
-
-  offGamePlayed(cb) {
-    return this.refGameData().off('child_added', cb);
+    const query = this.refGameData()
+      .orderByChild('endedAt')
+      .startAt(firebase.database.ServerValue.TIMESTAMP);
+    query.on('child_added', cb);
+    _listeners.push(query);
+    return query;
   }
 
   queryTotalUsersPlayed() {
@@ -138,12 +140,14 @@ class GameStorage {
 
       // update stats for mode
       promises.push(this.incrementUserGameStat(this._getStatKey('played')));
+      promises.push(this.saveUserGameStat(this._getStatKey('lastplayed'), firebase.database.ServerValue.TIMESTAMP));
       origKeys.forEach((key) => {
         promises.push(this.saveMaxUserGameStat(this._getStatKey(key), gamedata[key]));
       });
 
       // update stats for totals
       promises.push(this.incrementUserGameStat(this._getTotalKey('played')));
+      promises.push(this.saveUserGameStat(this._getTotalKey('lastplayed'), firebase.database.ServerValue.TIMESTAMP));
 
       rsvp.all(promises).then(resolve).catch(reject);
     });
@@ -178,6 +182,10 @@ class GameStorage {
     return this._saveUserGameStat(stat, 'inc', inc || 1);
   }
 
+  saveUserGameStat(stat, newValue) {
+    return this._saveUserGameStat(stat, 'last', newValue);
+  }
+
   saveMaxUserGameStat(stat, newValue) {
     return this._saveUserGameStat(stat, 'max', newValue);
   }
@@ -208,6 +216,10 @@ class GameStorage {
               newValue = value;
               save = true;
             }
+            break;
+          case 'last':
+            newValue = value;
+            save = true;
             break;
         }
 
