@@ -63,6 +63,21 @@ var GameStorage = function () {
       }
     }
   }, {
+    key: 'off',
+    value: function off() {
+      this.offGamePlayed();
+    }
+  }, {
+    key: 'onGamePlayed',
+    value: function onGamePlayed(cb) {
+      return this.refGameData().on('child_added', cb);
+    }
+  }, {
+    key: 'offGamePlayed',
+    value: function offGamePlayed(cb) {
+      return this.refGameData().off('child_added', cb);
+    }
+  }, {
     key: 'queryTotalUsersPlayed',
     value: function queryTotalUsersPlayed() {
       var _this = this;
