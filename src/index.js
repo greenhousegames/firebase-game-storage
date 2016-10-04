@@ -1,12 +1,23 @@
 import firebase from 'firebase';
 import rsvp from 'rsvp';
+import GameQuery from './game-query';
+import UserQuery from './user-query';
+import Auth from './auth';
+import Metrics from './metrics';
 
 class GameStorage {
-  constructor(name, firebase) {
-    this.name = name;
+  constructor(config) {
+    this.name = config.name;
     this.mode = 'standard';
-    this._firebase = firebase;
+    this._firebase = config.firebase;
     this._listeners = [];
+    this.queries = {
+      games: new GameQuery(this),
+      users: new UserQuery(this)
+    };
+    this.auth = new Auth(firebase);
+    this.metrics = new Metrics(storage);
+    this.metrics.initializeRules(config.metrics);
   }
 
   getMode(mode) {
@@ -32,7 +43,7 @@ class GameStorage {
   }
 
   refLoggedInUserData(path) {
-    const uid = this.firebaseAuth().currentUser.uid;
+    const uid = this.auth.currentUserUID();
     if (!uid) {
       return null;
     } else {
@@ -48,86 +59,11 @@ class GameStorage {
     this._listeners.forEach((listener) => listener.off());
   }
 
-  onGamePlayed(cb) {
-    const query = this.refGameData()
-      .orderByChild('endedAt')
-      .startAt(firebase.database.ServerValue.TIMESTAMP);
-    query.on('child_added', cb);
-    _listeners.push(query);
-    return query;
-  }
-
-  queryTotalUsersPlayed() {
-    const childProp = this._getStatKey('played');
-    const promise = new rsvp.Promise((resolve) => {
-      this.refUserData().orderByChild(childProp).startAt(1).once('value', (snapshot) => {
-        resolve(snapshot.numChildren());
-      });
-    });
-    return promise;
-  }
-
-  queryTotalGamesPlayed() {
-    const promise = new rsvp.Promise((resolve) => {
-      this.refGameData().once('value', (snapshot) => {
-        resolve(snapshot.numChildren());
-      });
-    });
-    return promise;
-  }
-
-  queryUserStatValue(prop) {
-    const childProp = this._getStatKey(prop);
-    const promise = new rsvp.Promise((resolve, reject) => {
-      this.refLoggedInUserData(childProp).once('value', (snapshot) => {
-        const val = snapshot.val();
-        if (val !== null) {
-          resolve(val);
-        } else {
-          reject();
-        }
-      });
-    });
-    return promise;
-  }
-
-  queryUserStatRanking(prop) {
-    const promise = new rsvp.Promise((resolve, reject) => {
-      this.queryUserStatValue(prop).then((value) => {
-        this.queryTotalUsersWithStat(prop, value).then((total) => {
-          resolve(total);
-        }).catch(reject);
-      }).catch(reject);
-    });
-    return promise;
-  }
-
-  queryTotalUsersWithStat(prop, value) {
-    value = value || 0;
-    const childProp = this._getStatKey(prop);
-    const promise = new rsvp.Promise((resolve) => {
-      this.refUserData().orderByChild(childProp).startAt(value).once('value', (snapshot) => {
-        resolve(snapshot.numChildren());
-      });
-    });
-    return promise;
-  }
-
-  queryTotalGamesWithStat(prop, value) {
-    value = value || 0;
-    const promise = new rsvp.Promise((resolve) => {
-      this.refGameData().orderByChild(prop).startAt(value).once('value', (snapshot) => {
-        resolve(snapshot.numChildren());
-      });
-    });
-    return promise;
-  }
-
   saveGamePlayed(data) {
     const origKeys = Object.keys(data);
     const gamedata = {
       endedAt: firebase.database.ServerValue.TIMESTAMP,
-      uid: this.firebaseAuth().currentUser ? this.firebaseAuth().currentUser.uid : '',
+      uid: this.auth.currentUserUID(),
       mode: this.mode
     };
     origKeys.forEach((key) => {
@@ -137,135 +73,9 @@ class GameStorage {
     const promise = new rsvp.Promise((resolve, reject) => {
       const promises = [];
       promises.push(this.refGameData().push().set(gamedata));
-
-      // update stats for mode
-      promises.push(this.incrementUserGameStat(this._getStatKey('played')));
-      promises.push(this.saveUserGameStat(this._getStatKey('lastplayed'), firebase.database.ServerValue.TIMESTAMP));
-      origKeys.forEach((key) => {
-        promises.push(this.saveMaxUserGameStat(this._getStatKey(key), gamedata[key]));
-      });
-
-      // update stats for totals
-      promises.push(this.incrementUserGameStat(this._getTotalKey('played')));
-      promises.push(this.saveUserGameStat(this._getTotalKey('lastplayed'), firebase.database.ServerValue.TIMESTAMP));
+      promises.push(this.metrics.saveMetrics(gamedata));
 
       rsvp.all(promises).then(resolve).catch(reject);
-    });
-    return promise;
-  }
-
-  queryTopUserStatValues(stat, n) {
-    n = n || 1;
-    const childProp = this._getStatKey(stat);
-    const values = [];
-    const query = this.refUserData().orderByChild(childProp).limitToLast(n);
-    const promise = new rsvp.Promise((resolve) => {
-      query.on('child_added', (snapshot) => {
-        values.push(snapshot.child(childProp).val());
-        if (values.length === n) {
-          done();
-        }
-      });
-
-      const done = () => {
-        clearTimeout(timeout);
-        query.off('child_added');
-        values.sort((a, b) => b - a);
-        resolve(values);
-      };
-      const timeout = setTimeout(done, 5000);
-    });
-    return promise;
-  }
-
-  incrementUserGameStat(stat, inc) {
-    return this._saveUserGameStat(stat, 'inc', inc || 1);
-  }
-
-  saveUserGameStat(stat, newValue) {
-    return this._saveUserGameStat(stat, 'last', newValue);
-  }
-
-  saveMaxUserGameStat(stat, newValue) {
-    return this._saveUserGameStat(stat, 'max', newValue);
-  }
-
-  saveMinUserGameStat(stat, newValue) {
-    return this._saveUserGameStat(stat, 'min', newValue);
-  }
-
-  _saveUserGameStat(stat, type, value) {
-    const ref = this.refLoggedInUserData(stat);
-    const promise = new rsvp.Promise((resolve, reject) => {
-      ref.once('value', (snapshot) => {
-        const oldValue = snapshot.val() || 0;
-        let newValue, save = false;
-        switch (type) {
-          case 'inc':
-            newValue = oldValue + value;
-            save = true;
-            break;
-          case 'max':
-            if (value > oldValue) {
-              newValue = value;
-              save = true;
-            }
-            break;
-          case 'min':
-            if (value < oldValue) {
-              newValue = value;
-              save = true;
-            }
-            break;
-          case 'last':
-            newValue = value;
-            save = true;
-            break;
-        }
-
-        if (save) {
-          ref.set(newValue).then(resolve).catch(reject);
-        } else {
-          resolve();
-        }
-      });
-    });
-    return promise;
-  }
-
-  _getTotalKey(stat) {
-    return this.name + '-total-' + stat;
-  }
-
-  _getStatKey(stat) {
-    return this.name + '-' + this.mode + '-' + stat;
-  }
-
-  firebaseAuth() {
-    return this._firebase.auth();
-  }
-
-  waitForAuth() {
-    const auth = this.firebaseAuth();
-    const promise = new rsvp.Promise((resolve) => {
-      const callback = () => {
-        off();
-        resolve();
-      };
-      const off = auth.onAuthStateChanged(callback);
-    });
-    return promise;
-  }
-
-  requireAuth() {
-    const promise = new rsvp.Promise((resolve, reject) => {
-      this.waitForAuth().then(() => {
-        if (!this.firebaseAuth().currentUser) {
-          this.firebaseAuth().signInAnonymously().then(resolve).catch(reject);
-        } else {
-          resolve();
-        }
-      }).catch(reject);
     });
     return promise;
   }
