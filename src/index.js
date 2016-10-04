@@ -1,7 +1,5 @@
 import firebase from 'firebase';
 import rsvp from 'rsvp';
-import GameQuery from './game-query';
-import UserQuery from './user-query';
 import Auth from './auth';
 import Metrics from './metrics';
 
@@ -10,11 +8,7 @@ class GameStorage {
     this.name = config.name;
     this.mode = 'standard';
     this._firebase = config.firebase;
-    this._listeners = [];
-    this.queries = {
-      games: new GameQuery(this),
-      users: new UserQuery(this)
-    };
+    this._queries = [];
     this.auth = new Auth(firebase);
 
     const metricConfig = JSON.parse(JSON.stringify(config.metrics));
@@ -60,14 +54,27 @@ class GameStorage {
   }
 
   off() {
-    this._listeners.forEach((listener) => {
-      listener.off('child_added');
-      listener.off('child_removed');
+    this._queries.forEach((q) => {
+      q.off('child_added');
+      q.off('child_removed');
     });
   }
 
   onGamePlayed(cb) {
-    return this.queries.games.onPlayed(cb);
+    let query = this.refGameData().orderByChild('endedAt');
+
+    query.limitToLast(1).once('value', (snapshot) => {
+      const games = snapshot.val();
+      const keys = Object.keys(games);
+
+      if (keys.length > 0) {
+        query = query.startAt(games[keys[0]].endedAt + 1);
+      }
+
+      // setup listener
+      query.on('child_added', (snap) => cb(snap.val()));
+      this._queries.push(query);
+    });
   }
 
   saveGamePlayed(data) {

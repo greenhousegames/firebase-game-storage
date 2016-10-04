@@ -72,6 +72,61 @@ class Metrics {
     return this._getGlobalMetrics(stat, evalName, 'all');
   }
 
+  getTotal(prop, comparision, value, otherValue) {
+    const promise = new rsvp.Promise((resolve) => {
+      let query = this.storage.refGameData();
+      if (prop) {
+        query = query.orderByChild(prop);
+        switch (comparision) {
+          case 'lesser':
+            query = query.endAt(value);
+            break;
+          case 'greater':
+            query = query.startAt(value);
+            break;
+          case 'between':
+            query = query.startAt(value).endAt(otherValue);
+            break;
+          case 'equal':
+            query = query.startAt(value).endAt(value);
+            break;
+        }
+      }
+      query.once('value', (snapshot) => {
+        resolve(snapshot.numChildren());
+      });
+    });
+    return promise;
+  }
+
+  getTotalUsers(stat, evalName, comparision, value, otherValue) {
+    const promise = new rsvp.Promise((resolve) => {
+      let query = this.storage.refUserData();
+      if (stat) {
+        const key = this._getStatKey(stat, evalName);
+        query = query.orderByChild(key);
+        switch (comparision) {
+          case 'lesser':
+            query = query.endAt(value);
+            break;
+          case 'greater':
+            query = query.startAt(value);
+            break;
+          case 'between':
+            query = query.startAt(value).endAt(otherValue);
+            break;
+          case 'equal':
+            query = query.startAt(value).endAt(value);
+            break;
+        }
+      }
+      query.once('value', (snapshot) => {
+        resolve(snapshot.numChildren());
+      });
+    });
+    return promise;
+  }
+
   _getGlobalMetrics(stat, evalName, type, total) {
     total = total || 1;
     const key = this._getStatKey(stat, evalName);
