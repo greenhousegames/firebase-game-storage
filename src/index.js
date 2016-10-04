@@ -16,8 +16,12 @@ class GameStorage {
       users: new UserQuery(this)
     };
     this.auth = new Auth(firebase);
-    this.metrics = new Metrics(storage);
-    this.metrics.initializeRules(config.metrics);
+
+    const metricConfig = JSON.parse(JSON.stringify(config.metrics));
+    metricConfig.endedAt = ['first', 'last'];
+    metricConfig.played = ['sum'];
+    this.metrics = new Metrics(this);
+    this.metrics.initializeRules(metricConfig);
   }
 
   getMode(mode) {
@@ -56,7 +60,14 @@ class GameStorage {
   }
 
   off() {
-    this._listeners.forEach((listener) => listener.off());
+    this._listeners.forEach((listener) => {
+      listener.off('child_added');
+      listener.off('child_removed');
+    });
+  }
+
+  onGamePlayed(cb) {
+    return this.queries.game.onPlayed(cb);
   }
 
   saveGamePlayed(data) {
@@ -64,7 +75,8 @@ class GameStorage {
     const gamedata = {
       endedAt: firebase.database.ServerValue.TIMESTAMP,
       uid: this.auth.currentUserUID(),
-      mode: this.mode
+      mode: this.mode,
+      played: 1
     };
     origKeys.forEach((key) => {
       gamedata[key] = data[key];

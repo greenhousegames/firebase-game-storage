@@ -60,6 +60,49 @@ class Metrics {
     return promise;
   }
 
+  getTopMetrics(stat, evalName, total) {
+    return _getGlobalMetrics(stat, evalName, 'last', total);
+  }
+
+  getBottomMetrics(stat, evalName, total) {
+    return _getGlobalMetrics(stat, evalName, 'first', total);
+  }
+
+  getAllMetrics(stat, evalName) {
+    return _getGlobalMetrics(stat, evalName, 'all');
+  }
+
+  _getGlobalMetrics(stat, evalName, type, total) {
+    total = total || 1;
+    const key = this._getStatKey(stat, evalName);
+    const values = [];
+    let query;
+    if (type === 'last') {
+      query = this.storage.refUserData().orderByChild(key).limitToLast(total);
+    } else if (type === 'first') {
+      query = this.storage.refUserData().orderByChild(key).limitToFirst(total);
+    } else {
+      query = this.storage.refUserData().orderByChild(key);
+    }
+    const promise = new rsvp.Promise((resolve) => {
+      query.on('child_added', (snapshot) => {
+        values.push(snapshot.child(key).val());
+        if (values.length === n) {
+          done();
+        }
+      });
+
+      const done = () => {
+        clearTimeout(timeout);
+        query.off('child_added');
+        values.sort((a, b) => b - a);
+        resolve(values);
+      };
+      const timeout = setTimeout(done, 5000);
+    });
+    return promise;
+  }
+
   _getMetricValue(stat, evaluatorName) {
     const key = this._getStatKey(stat, evaluatorName);
     const ref = this.storage.refLoggedInUserData(key);
