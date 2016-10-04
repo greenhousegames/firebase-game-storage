@@ -112,6 +112,67 @@ var Metrics = function () {
       return this._getGlobalMetrics(stat, evalName, 'all');
     }
   }, {
+    key: 'getTotal',
+    value: function getTotal(prop, comparision, value, otherValue) {
+      var _this3 = this;
+
+      var promise = new _rsvp2.default.Promise(function (resolve) {
+        var query = _this3.storage.refGameData();
+        if (prop) {
+          query = query.orderByChild(prop);
+          switch (comparision) {
+            case 'lesser':
+              query = query.endAt(value);
+              break;
+            case 'greater':
+              query = query.startAt(value);
+              break;
+            case 'between':
+              query = query.startAt(value).endAt(otherValue);
+              break;
+            case 'equal':
+              query = query.startAt(value).endAt(value);
+              break;
+          }
+        }
+        query.once('value', function (snapshot) {
+          resolve(snapshot.numChildren());
+        });
+      });
+      return promise;
+    }
+  }, {
+    key: 'getTotalUsers',
+    value: function getTotalUsers(stat, evalName, comparision, value, otherValue) {
+      var _this4 = this;
+
+      var promise = new _rsvp2.default.Promise(function (resolve) {
+        var query = _this4.storage.refUserData();
+        if (stat) {
+          var key = _this4._getStatKey(stat, evalName);
+          query = query.orderByChild(key);
+          switch (comparision) {
+            case 'lesser':
+              query = query.endAt(value);
+              break;
+            case 'greater':
+              query = query.startAt(value);
+              break;
+            case 'between':
+              query = query.startAt(value).endAt(otherValue);
+              break;
+            case 'equal':
+              query = query.startAt(value).endAt(value);
+              break;
+          }
+        }
+        query.once('value', function (snapshot) {
+          resolve(snapshot.numChildren());
+        });
+      });
+      return promise;
+    }
+  }, {
     key: '_getGlobalMetrics',
     value: function _getGlobalMetrics(stat, evalName, type, total) {
       total = total || 1;

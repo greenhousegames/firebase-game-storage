@@ -10,14 +10,6 @@ var _rsvp = require('rsvp');
 
 var _rsvp2 = _interopRequireDefault(_rsvp);
 
-var _gameQuery = require('./game-query');
-
-var _gameQuery2 = _interopRequireDefault(_gameQuery);
-
-var _userQuery = require('./user-query');
-
-var _userQuery2 = _interopRequireDefault(_userQuery);
-
 var _auth = require('./auth');
 
 var _auth2 = _interopRequireDefault(_auth);
@@ -37,11 +29,7 @@ var GameStorage = function () {
     this.name = config.name;
     this.mode = 'standard';
     this._firebase = config.firebase;
-    this._listeners = [];
-    this.queries = {
-      games: new _gameQuery2.default(this),
-      users: new _userQuery2.default(this)
-    };
+    this._queries = [];
     this.auth = new _auth2.default(_firebase2.default);
 
     var metricConfig = JSON.parse(JSON.stringify(config.metrics));
@@ -93,20 +81,37 @@ var GameStorage = function () {
   }, {
     key: 'off',
     value: function off() {
-      this._listeners.forEach(function (listener) {
-        listener.off('child_added');
-        listener.off('child_removed');
+      this._queries.forEach(function (q) {
+        q.off('child_added');
+        q.off('child_removed');
       });
     }
   }, {
     key: 'onGamePlayed',
     value: function onGamePlayed(cb) {
-      return this.queries.games.onPlayed(cb);
+      var _this = this;
+
+      var query = this.refGameData().orderByChild('endedAt');
+
+      query.limitToLast(1).once('value', function (snapshot) {
+        var games = snapshot.val();
+        var keys = Object.keys(games);
+
+        if (keys.length > 0) {
+          query = query.startAt(games[keys[0]].endedAt + 1);
+        }
+
+        // setup listener
+        query.on('child_added', function (snap) {
+          return cb(snap.val());
+        });
+        _this._queries.push(query);
+      });
     }
   }, {
     key: 'saveGamePlayed',
     value: function saveGamePlayed(data) {
-      var _this = this;
+      var _this2 = this;
 
       var origKeys = Object.keys(data);
       var gamedata = {
@@ -121,8 +126,8 @@ var GameStorage = function () {
 
       var promise = new _rsvp2.default.Promise(function (resolve, reject) {
         var promises = [];
-        promises.push(_this.refGameData().push().set(gamedata));
-        promises.push(_this.metrics.saveMetrics(gamedata));
+        promises.push(_this2.refGameData().push().set(gamedata));
+        promises.push(_this2.metrics.saveMetrics(gamedata));
 
         _rsvp2.default.all(promises).then(resolve).catch(reject);
       });
