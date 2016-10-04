@@ -42,7 +42,11 @@ var GameStorage = function () {
   _createClass(GameStorage, [{
     key: 'getMode',
     value: function getMode(mode) {
-      var storage = new GameStorage(this.name, this._firebase);
+      var storage = new GameStorage({
+        name: this.name,
+        firebase: this._firebase,
+        metrics: this.metrics.rules
+      });
       storage.mode = mode;
       return storage;
     }
