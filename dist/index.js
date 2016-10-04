@@ -43,8 +43,12 @@ var GameStorage = function () {
       users: new _userQuery2.default(this)
     };
     this.auth = new _auth2.default(_firebase2.default);
-    this.metrics = new _metrics2.default(storage);
-    this.metrics.initializeRules(config.metrics);
+
+    var metricConfig = JSON.parse(JSON.stringify(config.metrics));
+    metricConfig.endedAt = ['first', 'last'];
+    metricConfig.played = ['sum'];
+    this.metrics = new _metrics2.default(this);
+    this.metrics.initializeRules(metricConfig);
   }
 
   _createClass(GameStorage, [{
@@ -90,8 +94,14 @@ var GameStorage = function () {
     key: 'off',
     value: function off() {
       this._listeners.forEach(function (listener) {
-        return listener.off();
+        listener.off('child_added');
+        listener.off('child_removed');
       });
+    }
+  }, {
+    key: 'onGamePlayed',
+    value: function onGamePlayed(cb) {
+      return this.queries.game.onPlayed(cb);
     }
   }, {
     key: 'saveGamePlayed',
@@ -102,7 +112,8 @@ var GameStorage = function () {
       var gamedata = {
         endedAt: _firebase2.default.database.ServerValue.TIMESTAMP,
         uid: this.auth.currentUserUID(),
-        mode: this.mode
+        mode: this.mode,
+        played: 1
       };
       origKeys.forEach(function (key) {
         gamedata[key] = data[key];

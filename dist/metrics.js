@@ -93,6 +93,55 @@ var Metrics = function () {
       return promise;
     }
   }, {
+    key: 'getTopMetrics',
+    value: function getTopMetrics(stat, evalName, total) {
+      return _getGlobalMetrics(stat, evalName, 'last', total);
+    }
+  }, {
+    key: 'getBottomMetrics',
+    value: function getBottomMetrics(stat, evalName, total) {
+      return _getGlobalMetrics(stat, evalName, 'first', total);
+    }
+  }, {
+    key: 'getAllMetrics',
+    value: function getAllMetrics(stat, evalName) {
+      return _getGlobalMetrics(stat, evalName, 'all');
+    }
+  }, {
+    key: '_getGlobalMetrics',
+    value: function _getGlobalMetrics(stat, evalName, type, total) {
+      total = total || 1;
+      var key = this._getStatKey(stat, evalName);
+      var values = [];
+      var query = void 0;
+      if (type === 'last') {
+        query = this.storage.refUserData().orderByChild(key).limitToLast(total);
+      } else if (type === 'first') {
+        query = this.storage.refUserData().orderByChild(key).limitToFirst(total);
+      } else {
+        query = this.storage.refUserData().orderByChild(key);
+      }
+      var promise = new rsvp.Promise(function (resolve) {
+        query.on('child_added', function (snapshot) {
+          values.push(snapshot.child(key).val());
+          if (values.length === n) {
+            done();
+          }
+        });
+
+        var done = function done() {
+          clearTimeout(timeout);
+          query.off('child_added');
+          values.sort(function (a, b) {
+            return b - a;
+          });
+          resolve(values);
+        };
+        var timeout = setTimeout(done, 5000);
+      });
+      return promise;
+    }
+  }, {
     key: '_getMetricValue',
     value: function _getMetricValue(stat, evaluatorName) {
       var key = this._getStatKey(stat, evaluatorName);
