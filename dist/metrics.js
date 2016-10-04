@@ -2,6 +2,12 @@
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
+var _rsvp = require('rsvp');
+
+var _rsvp2 = _interopRequireDefault(_rsvp);
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
 var Metrics = function () {
@@ -35,13 +41,13 @@ var Metrics = function () {
       this.addEvaluator('last', function (newVal) {
         return newVal;
       });
-      this.addEvaluator('add', function (newVal, oldVal) {
+      this.addEvaluator('sum', function (newVal, oldVal) {
         return oldVal + newVal;
       });
-      this.addEvaluator('sub', function (newVal, oldVal) {
+      this.addEvaluator('diff', function (newVal, oldVal) {
         return oldVal - newVal;
       });
-      this.addEvaluator('mul', function (newVal, oldVal) {
+      this.addEvaluator('multi', function (newVal, oldVal) {
         return oldVal * newVal;
       });
       this.addEvaluator('div', function (newVal, oldVal) {
@@ -64,29 +70,27 @@ var Metrics = function () {
           });
         }
       }
-      return rsvp.all(promises);
+      return _rsvp2.default.all(promises);
     }
   }, {
     key: 'getMetrics',
     value: function getMetrics() {
       var _this2 = this;
 
-      var promise = new rsvp.Promise(function (resolve, reject) {
+      var promise = new _rsvp2.default.Promise(function (resolve, reject) {
         var promises = [];
         var metrics = {};
         for (var key in _this2.rules) {
           metrics[key] = {};
           _this2.rules[key].forEach(function (metric) {
             if (_this2.evaluators[metric]) {
-              promises.push(_this2._getMetricValue(key, metric).then(function (val) {
-                metrics[key][metric] = val;
-              }));
+              promises.push(_this2._captureMetricValue(key, metric, metrics));
             } else {
               metrics[key][metric] = null;
             }
           });
         }
-        return rsvp.all(promises).then(function () {
+        return _rsvp2.default.all(promises).then(function () {
           resolve(metrics);
         }).catch(reject);
       });
@@ -95,17 +99,17 @@ var Metrics = function () {
   }, {
     key: 'getTopMetrics',
     value: function getTopMetrics(stat, evalName, total) {
-      return _getGlobalMetrics(stat, evalName, 'last', total);
+      return this._getGlobalMetrics(stat, evalName, 'last', total);
     }
   }, {
     key: 'getBottomMetrics',
     value: function getBottomMetrics(stat, evalName, total) {
-      return _getGlobalMetrics(stat, evalName, 'first', total);
+      return this._getGlobalMetrics(stat, evalName, 'first', total);
     }
   }, {
     key: 'getAllMetrics',
     value: function getAllMetrics(stat, evalName) {
-      return _getGlobalMetrics(stat, evalName, 'all');
+      return this._getGlobalMetrics(stat, evalName, 'all');
     }
   }, {
     key: '_getGlobalMetrics',
@@ -121,10 +125,10 @@ var Metrics = function () {
       } else {
         query = this.storage.refUserData().orderByChild(key);
       }
-      var promise = new rsvp.Promise(function (resolve) {
+      var promise = new _rsvp2.default.Promise(function (resolve) {
         query.on('child_added', function (snapshot) {
           values.push(snapshot.child(key).val());
-          if (values.length === n) {
+          if (values.length === total) {
             done();
           }
         });
@@ -142,13 +146,17 @@ var Metrics = function () {
       return promise;
     }
   }, {
-    key: '_getMetricValue',
-    value: function _getMetricValue(stat, evaluatorName) {
+    key: '_captureMetricValue',
+    value: function _captureMetricValue(stat, evaluatorName, metrics) {
       var key = this._getStatKey(stat, evaluatorName);
       var ref = this.storage.refLoggedInUserData(key);
-      var promise = new rsvp.Promise(function (resolve) {
+      var promise = new _rsvp2.default.Promise(function (resolve) {
         ref.once('value', function (snapshot) {
-          resolve(snapshot.val());
+          var val = snapshot.val();
+          if (metrics) {
+            metrics[stat][evaluatorName] = val;
+          }
+          resolve(val);
         });
       });
       return promise;
@@ -158,7 +166,7 @@ var Metrics = function () {
     value: function _calculateMetricValue(stat, newVal, evaluatorName, evaluator) {
       var key = this._getStatKey(stat, evaluatorName);
       var ref = this.storage.refLoggedInUserData(key);
-      var promise = new rsvp.Promise(function (resolve, reject) {
+      var promise = new _rsvp2.default.Promise(function (resolve, reject) {
         ref.once('value', function (snapshot) {
           var oldVal = snapshot.val();
           if (typeof oldVal === 'undefined') {

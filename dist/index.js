@@ -101,7 +101,7 @@ var GameStorage = function () {
   }, {
     key: 'onGamePlayed',
     value: function onGamePlayed(cb) {
-      return this.queries.game.onPlayed(cb);
+      return this.queries.games.onPlayed(cb);
     }
   }, {
     key: 'saveGamePlayed',
