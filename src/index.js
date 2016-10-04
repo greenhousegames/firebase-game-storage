@@ -19,7 +19,11 @@ class GameStorage {
   }
 
   getMode(mode) {
-    const storage = new GameStorage(this.name, this._firebase);
+    const storage = new GameStorage({
+      name: this.name,
+      firebase: this._firebase,
+      metrics: this.metrics.rules
+    });
     storage.mode = mode;
     return storage;
   }
