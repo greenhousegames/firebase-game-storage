@@ -1,3 +1,5 @@
+import rsvp from 'rsvp';
+
 class Metrics {
   constructor(storage) {
     this.storage = storage;
@@ -16,9 +18,9 @@ class Metrics {
     this.addEvaluator('min', (newVal, oldVal) => newVal < oldVal ? newVal : null);
     this.addEvaluator('first', () => null);
     this.addEvaluator('last', (newVal) => newVal);
-    this.addEvaluator('add', (newVal, oldVal) => oldVal + newVal);
-    this.addEvaluator('sub', (newVal, oldVal) => oldVal - newVal);
-    this.addEvaluator('mul', (newVal, oldVal) => oldVal * newVal);
+    this.addEvaluator('sum', (newVal, oldVal) => oldVal + newVal);
+    this.addEvaluator('diff', (newVal, oldVal) => oldVal - newVal);
+    this.addEvaluator('multi', (newVal, oldVal) => oldVal * newVal);
     this.addEvaluator('div', (newVal, oldVal) => oldVal / newVal);
   }
 
@@ -45,9 +47,7 @@ class Metrics {
         metrics[key] = {};
         this.rules[key].forEach((metric) => {
           if (this.evaluators[metric]) {
-            promises.push(this._getMetricValue(key, metric).then((val) => {
-              metrics[key][metric] = val;
-            }));
+            promises.push(this._captureMetricValue(key, metric, metrics));
           } else {
             metrics[key][metric] = null;
           }
@@ -61,15 +61,15 @@ class Metrics {
   }
 
   getTopMetrics(stat, evalName, total) {
-    return _getGlobalMetrics(stat, evalName, 'last', total);
+    return this._getGlobalMetrics(stat, evalName, 'last', total);
   }
 
   getBottomMetrics(stat, evalName, total) {
-    return _getGlobalMetrics(stat, evalName, 'first', total);
+    return this._getGlobalMetrics(stat, evalName, 'first', total);
   }
 
   getAllMetrics(stat, evalName) {
-    return _getGlobalMetrics(stat, evalName, 'all');
+    return this._getGlobalMetrics(stat, evalName, 'all');
   }
 
   _getGlobalMetrics(stat, evalName, type, total) {
@@ -87,7 +87,7 @@ class Metrics {
     const promise = new rsvp.Promise((resolve) => {
       query.on('child_added', (snapshot) => {
         values.push(snapshot.child(key).val());
-        if (values.length === n) {
+        if (values.length === total) {
           done();
         }
       });
@@ -103,12 +103,16 @@ class Metrics {
     return promise;
   }
 
-  _getMetricValue(stat, evaluatorName) {
+  _captureMetricValue(stat, evaluatorName, metrics) {
     const key = this._getStatKey(stat, evaluatorName);
     const ref = this.storage.refLoggedInUserData(key);
     const promise = new rsvp.Promise((resolve) => {
       ref.once('value', (snapshot) => {
-        resolve(snapshot.val());
+        const val = snapshot.val();
+        if (metrics) {
+          metrics[stat][evaluatorName] = val;
+        }
+        resolve(val);
       });
     });
     return promise;
